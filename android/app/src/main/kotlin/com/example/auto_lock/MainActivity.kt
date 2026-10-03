@@ -1,11 +1,12 @@
 package com.example.auto_lock
 
 import android.app.Activity
+import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
-import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
@@ -21,9 +22,9 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         devicePolicyHelper = DevicePolicyHelper(this)
-        
+
         // Register method channel
         val binaryMessenger = flutterEngine?.dartExecutor?.binaryMessenger
         if (binaryMessenger != null) {
@@ -37,8 +38,22 @@ class MainActivity : FlutterActivity() {
                         result.success(devicePolicyHelper?.isDeviceOwner() ?: false)
                     }
                     "lockNow" -> {
+                        // DEPRECATED: kept for backward compat, but we now use accessibility
+                        Log.w(TAG, "lockNow() called but app should use lockViaAccessibility()")
                         val success = devicePolicyHelper?.lockScreenAllowBiometric() ?: false
                         result.success(success)
+                    }
+                    "lockViaAccessibility" -> {
+                        val success = tryLockViaAccessibility()
+                        result.success(success)
+                    }
+                    "isAccessibilityServiceEnabled" -> {
+                        val enabled = isAccessibilityServiceEnabled()
+                        result.success(enabled)
+                    }
+                    "openAccessibilitySettings" -> {
+                        openAccessibilitySettings()
+                        result.success(null)
                     }
                     "removeActiveAdmin" -> {
                         devicePolicyHelper?.removeActiveAdmin()
@@ -50,6 +65,47 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Lock screen via AccessibilityService GLOBAL_ACTION_LOCK_SCREEN.
+     * This mimics a natural power-button press, preserving biometric auth.
+     */
+    private fun tryLockViaAccessibility(): Boolean {
+        val service = ScreenLockAccessibilityService.instance
+        if (service != null) {
+            service.triggerScreenLock()
+            return true
+        } else {
+            Log.w(TAG, "ScreenLockAccessibilityService instance is null – service likely not enabled")
+            return false
+        }
+    }
+
+    /**
+     * Check whether the accessibility service is enabled and bound for this app.
+     */
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        val serviceComponent = ComponentName(this, ScreenLockAccessibilityService::class.java)
+        val enabledServices = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: return false
+
+        // Services are colon-separated in the format package/service
+        val colonSeparated = enabledServices.split(":")
+        return colonSeparated.any {
+            it.trim() == "$packageName/${ScreenLockAccessibilityService::class.java.name}"
+        }
+    }
+
+    /**
+     * Open system Accessibility settings so the user can enable our service.
+     */
+    private fun openAccessibilitySettings() {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(intent)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

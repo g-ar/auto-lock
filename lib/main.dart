@@ -27,35 +27,30 @@ class LockScreenPage extends StatefulWidget {
 
 class _LockScreenPageState extends State<LockScreenPage> {
   String _status = "Not started";
+  bool _accessibilityEnabled = false;
   final MethodChannel _channel = MethodChannel('com.example.auto_lock/device_policy');
 
   @override
   void initState() {
     super.initState();
-    _checkAndLock();
+    _checkAccessibilityStatus();
   }
 
-  Future<void> _checkDeviceOwnerStatus() async {
-    developer.log("Checking device owner status...", name: "AutoLock");
-    setState(() {
-      _status = "Checking...";
-    });
-    
+  Future<void> _checkAccessibilityStatus() async {
+    developer.log("Checking accessibility service status...", name: "AutoLock");
     try {
-      bool isDeviceOwner = await _channel.invokeMethod<bool>('isDeviceOwner') ?? false;
-      bool isAdminActive = await _channel.invokeMethod<bool>('isDeviceAdminActive') ?? false;
-      
-      developer.log("isDeviceOwner: $isDeviceOwner, isAdminActive: $isAdminActive", name: "AutoLock");
-      
+      bool enabled = await _channel.invokeMethod<bool>('isAccessibilityServiceEnabled') ?? false;
+      developer.log("Accessibility enabled: $enabled", name: "AutoLock");
       if (mounted) {
         setState(() {
-          _status = "Device Admin Active: $isAdminActive\n"
-              "Device Owner: $isDeviceOwner\n"
-              "${isDeviceOwner ? '✓ Ready to lock!' : '✗ Run set_device_owner.sh via ADB'}";
+          _accessibilityEnabled = enabled;
+          _status = enabled
+              ? "✓ Accessibility service enabled. Ready to lock!"
+              : "✗ Accessibility service not enabled.\nTap the button below to enable it in Settings.";
         });
       }
     } catch (e) {
-      developer.log("Error checking status: $e", name: "AutoLock", error: e);
+      developer.log("Error checking accessibility status: $e", name: "AutoLock", error: e);
       if (mounted) {
         setState(() {
           _status = "Error: $e";
@@ -64,55 +59,33 @@ class _LockScreenPageState extends State<LockScreenPage> {
     }
   }
 
-  Future<void> _checkAndLock() async {
-    developer.log("Button pressed, starting _checkAndLock", name: "AutoLock");
+  Future<void> _openAccessibilitySettings() async {
+    await _channel.invokeMethod<void>('openAccessibilitySettings');
+  }
+
+  Future<void> _lockViaAccessibility() async {
+    developer.log("Locking screen via AccessibilityService...", name: "AutoLock");
     setState(() {
-      _status = "Checking permission...";
+      _status = "Locking screen...";
     });
 
     try {
-      bool isAdminActive = await _channel.invokeMethod<bool>('isDeviceAdminActive') ?? false;
-      developer.log("isAdminActive: $isAdminActive", name: "AutoLock");
-
-      if (isAdminActive) {
-        setState(() {
-          _status = "Admin active. Locking screen...";
-        });
-        developer.log("Device admin active. Calling lockNow()...", name: "AutoLock");
-        
-        bool success = await _channel.invokeMethod<bool>('lockNow') ?? false;
-        
-        if (mounted) {
-          if (success) {
-            setState(() {
-              _status = "✓ Screen locked!";
-            });
-            developer.log("lockNow() succeeded", name: "AutoLock");
-          } else {
-            setState(() {
-              _status = "✗ lockNow() failed.\nIs your app the Device Owner?";
-            });
-            developer.log("lockNow() failed", name: "AutoLock");
-          }
-        }
-      } else {
-        setState(() {
-          _status = "Device admin not active. Activating...";
-        });
-        developer.log("Device admin not active. Will need to activate first.", name: "AutoLock");
-        
-        // On Flutter, we can't easily trigger the device admin intent from Dart.
-        // User needs to activate via Settings > Security > Device admin apps
-        if (mounted) {
+      bool success = await _channel.invokeMethod<bool>('lockViaAccessibility') ?? false;
+      if (mounted) {
+        if (success) {
           setState(() {
-            _status = "Please activate device admin:\n"
-                "Settings > Security > Device admin apps\n"
-                "Enable 'AutoLock Admin'";
+            _status = "✓ Screen locked! (biometrics preserved)";
           });
+          developer.log("lockViaAccessibility() succeeded", name: "AutoLock");
+        } else {
+          setState(() {
+            _status = "✗ Failed to lock.\nMake sure the accessibility service is enabled in Settings.";
+          });
+          developer.log("lockViaAccessibility() failed", name: "AutoLock");
         }
       }
     } catch (e, stack) {
-      developer.log("Error in _checkAndLock: $e\n$stack", name: "AutoLock", error: e, stackTrace: stack);
+      developer.log("Error in _lockViaAccessibility: $e\n$stack", name: "AutoLock", error: e, stackTrace: stack);
       if (mounted) {
         setState(() {
           _status = "Error: $e";
@@ -126,25 +99,53 @@ class _LockScreenPageState extends State<LockScreenPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Auto Lock App')),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ElevatedButton(
-              onPressed: _checkAndLock,
-              child: const Text('Grant Admin & Lock Screen'),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _checkDeviceOwnerStatus,
-              child: const Text('Check Device Owner Status'),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              _status,
-              style: const TextStyle(fontSize: 16),
-              textAlign: TextAlign.center,
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Step 1: Enable accessibility service
+              ElevatedButton.icon(
+                onPressed: _openAccessibilitySettings,
+                icon: const Icon(Icons.accessibility),
+                label: const Text('Enable Accessibility Service'),
+              ),
+              const SizedBox(height: 12),
+              // Step 2: Lock screen (only if accessibility is enabled)
+              ElevatedButton.icon(
+                onPressed: _accessibilityEnabled ? _lockViaAccessibility : null,
+                icon: const Icon(Icons.lock),
+                label: const Text('Lock Screen (Preserve Biometrics)'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _accessibilityEnabled ? Colors.green.shade600 : Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 24),
+              // Status text
+              Text(
+                _status,
+                style: const TextStyle(fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              // Info about biometric preservation
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: const Text(
+                  "ℹ The accessibility service method uses GLOBAL_ACTION_LOCK_SCREEN,\n"
+                  "which mimics a natural power-button press.\n"
+                  "Biometric unlock (fingerprint/face) remains active after locking.",
+                  style: TextStyle(fontSize: 13),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

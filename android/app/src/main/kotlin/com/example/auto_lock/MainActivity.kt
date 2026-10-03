@@ -118,5 +118,15 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         Log.d(TAG, "MainActivity onResume")
+        // Share this activity reference with the accessibility service
+        ScreenLockAccessibilityService.mainActivity = this
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Clear reference when activity is not visible
+        if (ScreenLockAccessibilityService.mainActivity === this) {
+            ScreenLockAccessibilityService.mainActivity = null
+        }
     }
 }

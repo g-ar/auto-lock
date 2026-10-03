@@ -25,15 +25,53 @@ class LockScreenPage extends StatefulWidget {
   State<LockScreenPage> createState() => _LockScreenPageState();
 }
 
-class _LockScreenPageState extends State<LockScreenPage> {
+class _LockScreenPageState extends State<LockScreenPage> with WidgetsBindingObserver {
   String _status = "Not started";
   bool _accessibilityEnabled = false;
+  bool _justLocked = false;
+  bool _firstResume = true;
   final MethodChannel _channel = MethodChannel('com.example.auto_lock/device_policy');
 
   @override
   void initState() {
     super.initState();
+    _justLocked = false;
+    _firstResume = true;
+    WidgetsBinding.instance.addObserver(this);
     _checkAccessibilityStatus();
+    // Auto-lock on first app open
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted && _accessibilityEnabled && _firstResume) {
+        setState(() => _justLocked = true);
+        _lockViaAccessibility();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      // App going to background — next resume should lock
+      _firstResume = false;
+      _justLocked = false; // Reset so next manual lock can trigger again
+    } else if (state == AppLifecycleState.resumed) {
+      // App came back to foreground
+      if (!_firstResume && _accessibilityEnabled && !_justLocked) {
+        // Not the first time the app has been open, and we didn't just lock
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _lockViaAccessibility();
+        });
+      }
+      if (_firstResume) {
+        _firstResume = false;
+      }
+    }
   }
 
   Future<void> _checkAccessibilityStatus() async {
@@ -113,7 +151,10 @@ class _LockScreenPageState extends State<LockScreenPage> {
               const SizedBox(height: 12),
               // Step 2: Lock screen (only if accessibility is enabled)
               ElevatedButton.icon(
-                onPressed: _accessibilityEnabled ? _lockViaAccessibility : null,
+                onPressed: _accessibilityEnabled ? () {
+                  setState(() => _justLocked = true);
+                  _lockViaAccessibility();
+                } : null,
                 icon: const Icon(Icons.lock),
                 label: const Text('Lock Screen (Preserve Biometrics)'),
                 style: ElevatedButton.styleFrom(

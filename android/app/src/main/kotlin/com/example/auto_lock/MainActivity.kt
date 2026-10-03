@@ -37,7 +37,7 @@ class MainActivity : FlutterActivity() {
                         result.success(devicePolicyHelper?.isDeviceOwner() ?: false)
                     }
                     "lockNow" -> {
-                        val success = devicePolicyHelper?.lockNow() ?: false
+                        val success = devicePolicyHelper?.lockScreenAllowBiometric() ?: false
                         result.success(success)
                     }
                     "removeActiveAdmin" -> {

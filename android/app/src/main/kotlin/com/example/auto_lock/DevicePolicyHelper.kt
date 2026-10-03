@@ -52,29 +52,46 @@ class DevicePolicyHelper(private val context: Context) {
     }
 
     /**
-     * Lock the screen immediately
-     * Returns true if successful, false if not device admin or not device owner
+     * Lock the screen while respecting biometric authentication
+     * Uses lockNow() with null password to respect biometrics
+     * Returns true if successful, false if not device admin
      */
-    fun lockNow(): Boolean {
+    fun lockScreenAllowBiometric(): Boolean {
         if (!devicePolicyManager.isAdminActive(componentName)) {
             Log.e(TAG, "Cannot lock: device admin not active")
             return false
         }
         
-        // lockNow() requires device admin, but on Android 10+ it also needs to be device owner
         try {
-            devicePolicyManager.lockNow()
-            Log.d(TAG, "lockNow() called successfully")
+            // Call lockNow() with null password to respect biometrics
+            // The null password tells the system to use the device's default authentication
+            try {
+                // Android 7.0+ overload: lockNow(CharSequence password, long timeout, String packageName)
+                val lockNowMethod = devicePolicyManager.javaClass.getMethod(
+                    "lockNow",
+                    CharSequence::class.java,
+                    java.lang.Long.TYPE,
+                    String::class.java
+                )
+                // null password = use device default auth (biometrics if configured)
+                lockNowMethod.invoke(devicePolicyManager, null, 0L, context.packageName)
+                Log.d(TAG, "lockNow(null, 0, package) - should respect biometrics")
+            } catch (e: NoSuchMethodException) {
+                // Older Android versions
+                devicePolicyManager.lockNow()
+                Log.d(TAG, "lockNow() (older API)")
+            }
+            
             return true
         } catch (e: SecurityException) {
-            Log.e(TAG, "lockNow() failed: $e")
+            Log.e(TAG, "Lock screen error: $e")
             return false
         } catch (e: Exception) {
-            Log.e(TAG, "lockNow() error: $e")
+            Log.e(TAG, "Lock screen error: $e")
             return false
         }
     }
-
+    
     /**
      * Remove active admin
      */

@@ -1,7 +1,7 @@
 # auto_lock
 
-This is an app to quickly lock the android screen by using accessibility service feature, to avoid using the power button, or if there's issue with the button.
-Most of the android devices screen turn on by double tap, but to turn off the screen, there's no tap to turn off feature.
+This is an app to quickly lock the android screen by using accessibility service feature, to avoid using the power button, or if there's issue with the button. <br/>
+Most of the android devices screen turn on by double tap, but to turn off the screen, there's no tap to turn off feature.<br/>
 Since accessibilty feature needs swipes and taps to turn off the screen instead of a simple tap, 
 this will provide such a feature!
 

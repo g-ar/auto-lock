@@ -1,17 +1,15 @@
 # auto_lock
 
-A new Flutter project.
+This is an app to quickly lock the android screen by using accessibility service feature, to avoid using the power button, or if there's issue with the button.
+Most of the android devices screen turn on by double tap, but to turn off the screen, there's no tap to turn off feature.
+Since accessibilty feature needs swipes and taps to turn off the screen instead of a simple tap, 
+this will provide such a feature!
 
-## Getting Started
+## Usage
 
-This project is a starting point for a Flutter application.
+- `flutter build apk --release`<br/>
+- `adb install build/app/outputs/flutter-apk/app-release.apk`
+- Enable accessibility service after opening the app
+- Add app to homescreen to quickly access to lock screen
+- If supported by the device, gesture control can be added, so that double tapping the rear of the phone will open this app
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
